@@ -5,7 +5,7 @@ import json
 import math
 import time
 
-def get_param() -> int:
+def get_param() -> tuple[int, str]:
     """
     Comprueba y gestiona los posibles errores en la input por el usuario en terminal
 
@@ -13,18 +13,21 @@ def get_param() -> int:
         int: Longitud de la contraseña
     """
 
-    if len(argv) != 2:
-        raise Exception("[ERROR]: Formato incorrecto: py hash.py <longitud>")
-
-    if argv[1] not in "0123456789":
+    if len(argv) != 3:
+        raise Exception("[ERROR]: Formato incorrecto: py/python/python3 hash.py <longitud> <Hash256>")
+    elif argv[1] not in "0123456789":
         raise Exception("[ERROR]: La longitud debe de ser un numero [0, 9]")
+    # Para saber si el Hash esta en formato AES-256 pasamos a bytes el argumento en hexadecimal y por necesidad debe de ser 32 bytes
+    elif len(bytes.fromhex(argv[2])) != 32:
+        raise Exception("[ERROR]: Introduzca el Hash en formato AES-256")
 
-    return int(argv[1])
+    return int(argv[1]), argv[2]
 
 
-def config() -> tuple[str, str]:
+def config() -> str:
     """
-    Obtenemos los datos variables de `config.json`
+    Obtenemos los caracteres en `config.json`. Por comodidad para poder cambiarlos por el usuario los he definido en json.
+    He investigado sobre como cargar los datos de un json en internet.
 
     Returns:
         tuple[hashlib._Hash, str]: Devolvemos el Hash256 a forzar y todos los caracteres que necesitamos
@@ -33,25 +36,29 @@ def config() -> tuple[str, str]:
     with open("config.json", "r") as config:
         data = json.load(config)
 
-    total_caracteres = data["caracteres"]["basicos"] + data["caracteres"]["numeros"] + data["caracteres"]["especiales"] # 72 caracteres => O(r^n) = O(72^length)
+    total_caracteres = data["caracteres"]["basicos"] + data["caracteres"]["numeros"] + data["caracteres"]["especiales"]
 
-    return data["hash"], total_caracteres
+    return total_caracteres
 
 
 def metrics(length: int) -> tuple[float, float]:
-    # Entropia
-    # Combinatoria y Permutaciones => Deberia ser solo combinatoria donde el orden no importa
-    # Teoria de conjuntos
+    """
+    Imprime en pantalla las posibles permutaciones, entropia y orden de complejidad
 
-    combinatoria = math.factorial(72) / math.factorial(length) * math.factorial(72 - length)
+    Args:
+        length (int): longitud de la palabra
+    Returns:
+        tuple[float, float]: Devolvemos las permutaciones y la entropia en caso de usarlas
+    """
+
+    permutaciones = math.factorial(72) / (math.factorial(length) * math.factorial(72 - length))
     entropia = length * math.log(72, 2)
 
-    print("=====================================================================")
-    print(f"||  Combinatoria: {round(combinatoria, 2)}     Entropia: {round(entropia, 2)}      ||")
-    print("=====================================================================\n")
+    print("================================================================================================")
+    print(f"||  Permutaciones: {round(permutaciones, 2)}     Entropia: {round(entropia, 2)}     Orden de complejidad exponencial: O(72^{length}))  ||")
+    print("================================================================================================\n")
 
-
-    return round(combinatoria, 2), round(entropia, 2)
+    return round(permutaciones, 2), round(entropia, 2)
 
 
 def password(ihash: str, length: int, caracteres: str):
@@ -63,6 +70,7 @@ def password(ihash: str, length: int, caracteres: str):
         length (int): Logitud de la contraseña
         ihash: Hash256 dado para romper por brute-force
     """
+
     def incrementar() -> bool:
         """
         Incremento el cual avanza desde [length, 0] asignando el siguiente carácter posible.
@@ -83,17 +91,15 @@ def password(ihash: str, length: int, caracteres: str):
                 password_list[puntero] = caracteres[index + 1]
                 return True
             else:
-                # Si estamos en el último carácter, reiniciamos este y llevamos al de la izquierda
+                # Si estamos en el último carácter, lo reiniciamos (vuelve al inicio) y llevamos el puntero a la izquierda
                 password_list[puntero] = caracteres[0]
                 puntero -= 1
-        # si salimos del while, no hay más combinaciones (agotado)
+        # Si salimos del while, no hay más combinaciones posibles
         return False
 
     finish = False
     password_list = [caracteres[0] for i in range(length)]
 
-
-    # Bucle principal: itera hasta encontrar o agotar combinaciones
     start_time = time.time()
     while not finish:
         password_str = "".join(password_list)
@@ -111,15 +117,14 @@ def password(ihash: str, length: int, caracteres: str):
             finish = True
 
     end_time = time.time()
-    print(f"\nTiempo de ejecución: {end_time - start_time:.5f} segundos")
+    print(f"\nTiempo de ejecucion: {end_time - start_time:.5f} segundos")
 
 if __name__ == "__main__":
-    length = get_param()
-    hash, caracteres = config()
-    metrics(length)
-    password(hashlib.sha256("n6$h".encode("utf-8")).hexdigest(), length, caracteres)
     try:
-        pass
+        length, hash = get_param()
+        caracteres = config()
+        metrics(length)
+        password(hash, length, caracteres)
     except Exception as error:
         print(error)
     except KeyboardInterrupt:
